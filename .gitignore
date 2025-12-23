@@ -1,0 +1,9 @@
+/.dart_tool/
+/.packages
+/build/
+/doc/api/
+/coverage/
+/example/.dart_tool/
+/example/.packages
+*.log
+pubspec.lock
