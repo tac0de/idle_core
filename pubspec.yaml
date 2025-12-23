@@ -1,6 +1,7 @@
 name: idle_core
 description: Deterministic idle engine core with tick simulation and offline progress.
 version: 0.1.0
+repository: https://github.com/tac0de/idle_core
 
 environment:
   sdk: ">=2.18.0 <4.0.0"
