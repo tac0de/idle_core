@@ -97,7 +97,7 @@ Comparison:
 
 ## Docs
 
-- `docs/guide.md` for determinism and offline rules.
+- `doc/guide.md` for determinism and offline rules.
 
 ## API overview
 
