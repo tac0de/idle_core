@@ -71,8 +71,8 @@ void main() {
 
 Screenshot:
 
-![idle_core demo](docs/images/demo1.png)
-![idle_core_demo](docs/images/demo2.png)
+![idle_core demo](doc/images/demo1.png)
+![idle_core_demo](doc/images/demo2.png)
 
 To create the screenshot, run the Flutter demo in `demo/` and capture the UI.
 
