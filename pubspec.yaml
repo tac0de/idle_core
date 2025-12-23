@@ -1,5 +1,5 @@
 name: idle_core
-description: Deterministic idle engine core with tick simulation and offline progress.
+description: Core runtime for idle game development with deterministic ticks, offline progress, and replay.
 version: 0.1.0
 repository: https://github.com/tac0de/idle_core
 

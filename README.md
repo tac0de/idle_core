@@ -1,6 +1,7 @@
 # idle_core
 
-Pure-Dart idle engine core with deterministic ticks and offline progress.
+Core, pure-Dart runtime for idle game development with deterministic ticks,
+offline progress, and replay-friendly reducers.
 
 ## Quick start
 
@@ -52,7 +53,7 @@ GameState reducer(GameState state, IdleAction action) {
 
 void main() {
   final engine = IdleEngine<GameState>(
-    config: const IdleConfig<GameState>(dtMs: 1000),
+    config: IdleConfig<GameState>(dtMs: 1000),
     reducer: reducer,
     state: const GameState(gold: 0, rate: 1),
   );
@@ -66,6 +67,38 @@ void main() {
 }
 ```
 
+## Demo
+
+Screenshot:
+
+![idle_core demo](docs/images/demo1.png)
+![idle_core_demo](docs/images/demo2.png)
+
+To create the screenshot, run the Flutter demo in `demo/` and capture the UI.
+
+## Why idle_core
+
+idle_core is a deterministic, pure-Dart runtime for idle game logic.
+It is not an inactivity detector or platform plugin.
+
+- Deterministic tick simulation and offline progress
+- Replay-friendly reducers for save/load and debugging
+- Pure Dart core (no Flutter dependency)
+- Safety caps and chunking for large offline windows
+
+Comparison:
+
+| Feature              | idle_core | idle detector packages |
+| -------------------- | --------- | ---------------------- |
+| Offline simulation   | Yes       | No                     |
+| Deterministic replay | Yes       | No                     |
+| Pure Dart runtime    | Yes       | No                     |
+| Inactivity detection | No        | Yes                    |
+
+## Docs
+
+- `docs/guide.md` for determinism and offline rules.
+
 ## API overview
 
 - `IdleEngine` orchestrates ticks and offline application.
@@ -75,6 +108,7 @@ void main() {
 - `TickClock` is injectable for tests.
 - `TickResult` and `OfflineResult` summarize progress.
 - `EventBus` optionally collects events for result snapshots.
+- Helpers: `tickForDuration`, `applyOfflineFromClock`, `replay`, `advance`.
 
 ## Core concepts
 

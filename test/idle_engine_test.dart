@@ -3,12 +3,18 @@ import 'dart:convert';
 import 'package:idle_core/idle_core.dart';
 import 'package:test/test.dart';
 
+/// State used for idle engine tests.
 class TestState extends IdleState {
+  /// Current gold amount.
   final int gold;
+
+  /// Gold earned per tick.
   final int rate;
 
+  /// Creates a new test state.
   const TestState({required this.gold, required this.rate});
 
+  /// Returns a copy with updated values.
   TestState copyWith({int? gold, int? rate}) {
     return TestState(
       gold: gold ?? this.gold,
@@ -16,28 +22,38 @@ class TestState extends IdleState {
     );
   }
 
+  /// Converts state to JSON.
   @override
   Map<String, dynamic> toJson() => {'gold': gold, 'rate': rate};
 }
 
+/// Action that upgrades the gold rate.
 class UpgradeRate extends IdleAction {
+  /// Amount to add to the rate.
   final int delta;
+
+  /// Creates an upgrade action.
   const UpgradeRate(this.delta);
 }
 
+/// Fake clock for time-based tests.
 class FakeTickClock implements TickClock {
   int _nowMs;
 
+  /// Creates a fake clock starting at [_nowMs].
   FakeTickClock(this._nowMs);
 
+  /// Returns the current fake time.
   @override
   int nowMs() => _nowMs;
 
+  /// Advances time by [deltaMs].
   void advance(int deltaMs) {
     _nowMs += deltaMs;
   }
 }
 
+/// Reducer used for tests.
 TestState reducer(TestState state, IdleAction action) {
   if (action is IdleTickAction) {
     return state.copyWith(gold: state.gold + state.rate);
@@ -48,10 +64,12 @@ TestState reducer(TestState state, IdleAction action) {
   return state;
 }
 
+/// Resource delta calculator for tests.
 Map<String, num> resourceDelta(TestState before, TestState after) {
   return {'gold': after.gold - before.gold};
 }
 
+/// Runs idle engine tests.
 void main() {
   test('determinism for identical inputs', () {
     final config = IdleConfig<TestState>(
@@ -101,6 +119,8 @@ void main() {
     expect(result.ticksApplied, equals(2));
     expect(result.ticksRequested, equals(4));
     expect(result.ticksCapped, equals(2));
+    expect(result.wasClamped, isTrue);
+    expect(result.wasCapped, isTrue);
     expect(result.state.gold, equals(2));
   });
 
@@ -135,6 +155,50 @@ void main() {
     expect(result.clampedDeltaMs, equals(0));
     expect(result.appliedDeltaMs, equals(0));
     expect(result.state.gold, equals(5));
+  });
+
+  test('offline from clock uses injected clock', () {
+    final clock = FakeTickClock(3500);
+    final engine = IdleEngine<TestState>(
+      config: IdleConfig<TestState>(),
+      reducer: reducer,
+      state: const TestState(gold: 0, rate: 1),
+      clock: clock,
+    );
+
+    final result = engine.applyOfflineFromClock(0);
+    expect(result.ticksApplied, equals(3));
+    expect(result.state.gold, equals(3));
+  });
+
+  test('tickForDuration converts ms to ticks', () {
+    final engine = IdleEngine<TestState>(
+      config: IdleConfig<TestState>(),
+      reducer: reducer,
+      state: const TestState(gold: 0, rate: 1),
+    );
+
+    final result = engine.tickForDuration(2500);
+    expect(result.ticksApplied, equals(2));
+    expect(result.state.gold, equals(2));
+  });
+
+  test('replay applies actions in order', () {
+    final engine = IdleEngine<TestState>(
+      config: IdleConfig<TestState>(),
+      reducer: reducer,
+      state: const TestState(gold: 0, rate: 1),
+    );
+
+    final result = engine.replay(<IdleAction>[
+      const IdleTickAction(1000),
+      const UpgradeRate(2),
+      const IdleTickAction(1000),
+    ]);
+
+    expect(result.ticksApplied, equals(2));
+    expect(result.state.gold, equals(4));
+    expect(result.state.rate, equals(3));
   });
 
   test('offline matches repeated ticks', () {
