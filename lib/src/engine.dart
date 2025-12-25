@@ -93,6 +93,9 @@ class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
   }
 
   /// Convenience alias for [applyOffline].
+  @Deprecated(
+    'Use applyOfflineWindow(lastSeenMs: ..., nowMs: ...) to avoid argument order mistakes.',
+  )
   OfflineResult<S> advance(int nowMs, int lastSeenMs) {
     return applyOffline(lastSeenMs, nowMs);
   }

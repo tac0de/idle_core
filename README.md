@@ -19,7 +19,7 @@ Add the dependency:
 
 ```yaml
 dependencies:
-  idle_core: ^0.2.1
+  idle_core: ^0.2.2
 ```
 
 Minimal usage:
@@ -191,6 +191,36 @@ Safety helpers:
 - `result.wasBackwards` flags negative deltas.
 - `result.nextLastSeenMs(lastSeenMs)` advances by applied ticks.
 
+## Integration contract (recommended)
+
+Persist only two things: `state.toJson()` and `lastSeenMs`.
+
+```dart
+// Implement GameState.fromJson in your state class.
+final savePayload = {
+  'state': engine.state.toJson(),
+  'lastSeenMs': lastSeenMs,
+};
+
+final restoredState = GameState.fromJson(
+  Map<String, dynamic>.from(savePayload['state'] as Map),
+);
+final restoredLastSeenMs = savePayload['lastSeenMs'] as int;
+
+final restoredEngine = IdleEngine<GameState>(
+  config: IdleConfig<GameState>(dtMs: 1000),
+  reducer: reducer,
+  state: restoredState,
+);
+
+final offline = restoredEngine.applyOfflineWindow(
+  lastSeenMs: restoredLastSeenMs,
+  nowMs: nowMs,
+);
+
+lastSeenMs = offline.nextLastSeenMs(restoredLastSeenMs);
+```
+
 ## Events and resource deltas
 
 Use `EventBus` to collect reducer events and `resourceDelta` to summarize state:
@@ -234,14 +264,17 @@ dart run tool/determinism_check.dart
 The tool uses a non-tick action to validate replay order:
 
 ```dart
+class UpgradeRate extends IdleAction {
+  final int delta;
+  const UpgradeRate(this.delta);
+}
+
 final actions = <IdleAction>[
   const IdleTickAction(1000),
   const UpgradeRate(2),
   const IdleTickAction(1000),
 ];
 ```
-
-See `tool/determinism_check.dart` for the action definition.
 
 ## Related packages
 
@@ -257,7 +290,7 @@ See `tool/determinism_check.dart` for the action definition.
 - `TickClock` is injectable for tests.
 - `TickResult` and `OfflineResult` summarize progress.
 - `EventBus` optionally collects events for result snapshots.
-- Helpers: `tickForDuration`, `applyOfflineFromClock`, `replay`, `advance`.
+- Helpers: `tickForDuration`, `applyOfflineFromClock`, `applyOfflineWindow`, `replay`.
 
 ## Comparison
 

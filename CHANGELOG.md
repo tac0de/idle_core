@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Deprecate the `advance` alias to prevent argument-order mistakes.
+- Add integration contract and UpgradeRate snippet to README.
+
 ## 0.2.1
 
 - Use UpgradeRate in determinism tool and document its usage.
