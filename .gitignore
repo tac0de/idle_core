@@ -7,4 +7,3 @@
 /example/.packages
 *.log
 pubspec.lock
-/.vscode
