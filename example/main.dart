@@ -63,7 +63,15 @@ void main() {
   engine.dispatch(const UpgradeRate(2));
   engine.tick(count: 3);
 
-  final offline = engine.applyOffline(0, 10 * 1000);
+  var lastSeenMs = 0;
+  const nowMs = 10 * 1000;
+  final offline = engine.applyOfflineWindow(
+    lastSeenMs: lastSeenMs,
+    nowMs: nowMs,
+  );
+
+  lastSeenMs = offline.nextLastSeenMs(lastSeenMs);
   stdout.writeln('Final: ${offline.state.toJson()}');
   stdout.writeln('Offline ticks: ${offline.ticksApplied}');
+  stdout.writeln('Unapplied ms: ${offline.unappliedDeltaMs}');
 }

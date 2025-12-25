@@ -92,4 +92,13 @@ class OfflineResult<S extends IdleState> {
     List<Object>? events,
   })  : resourcesDelta = _freezeDelta(resourcesDelta),
         events = _freezeEvents(events);
+
+  /// Computes the next last-seen timestamp based on applied ticks.
+  int nextLastSeenMs(int lastSeenMs) => lastSeenMs + appliedDeltaMs;
+
+  /// True if the requested delta was negative (clock moved backwards).
+  bool get wasBackwards => requestedDeltaMs < 0;
+
+  /// Milliseconds not applied due to caps or partial ticks.
+  int get unappliedDeltaMs => clampedDeltaMs - appliedDeltaMs;
 }

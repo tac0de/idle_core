@@ -12,3 +12,24 @@ class SystemTickClock implements TickClock {
   @override
   int nowMs() => DateTime.now().millisecondsSinceEpoch;
 }
+
+/// Manually controlled clock useful for tests and replays.
+class ManualTickClock implements TickClock {
+  int _nowMs;
+
+  /// Creates a manual clock starting at [nowMs].
+  ManualTickClock([int nowMs = 0]) : _nowMs = nowMs;
+
+  @override
+  int nowMs() => _nowMs;
+
+  /// Sets the current time to [nowMs].
+  void setMs(int nowMs) {
+    _nowMs = nowMs;
+  }
+
+  /// Advances time by [deltaMs].
+  void advance(int deltaMs) {
+    _nowMs += deltaMs;
+  }
+}

@@ -147,6 +147,14 @@ class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
     );
   }
 
+  /// Applies offline progress with named parameters to avoid ordering mistakes.
+  OfflineResult<S> applyOfflineWindow({
+    required int lastSeenMs,
+    required int nowMs,
+  }) {
+    return applyOffline(lastSeenMs, nowMs);
+  }
+
   TickResult<S> _tickResult(S before, int ticksApplied) {
     return TickResult<S>(
       state: _state,

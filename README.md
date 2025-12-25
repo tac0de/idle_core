@@ -1,7 +1,17 @@
 # idle_core
 
-Core, pure-Dart runtime for idle game development with deterministic ticks,
-offline progress, and replay-friendly reducers.
+Deterministic idle game simulation core for Dart: fixed ticks, offline progress,
+and replay. Pure Dart, no Flutter dependency.
+
+## What makes it different
+
+- Deterministic tick engine with replayable action logs for debugging and saves.
+- Offline progress with caps and chunking for predictable performance.
+- Pure Dart core that runs on server, CLI, or Flutter without platform deps.
+- Test-friendly clocks and offline diagnostics for safer time handling.
+
+If you need persistence or Flutter lifecycle hooks, use the companion
+packages and feed timestamps into idle_core.
 
 ## Quick start
 
@@ -9,7 +19,7 @@ Add the dependency:
 
 ```yaml
 dependencies:
-  idle_core: ^0.1.0
+  idle_core: ^0.1.9
 ```
 
 Minimal usage:
@@ -62,42 +72,181 @@ void main() {
   engine.dispatch(const UpgradeRate(2));
   engine.tick(count: 3);
 
-  final offline = engine.applyOffline(0, 10 * 1000);
+  var lastSeenMs = 0;
+  final nowMs = 10 * 1000;
+  final offline = engine.applyOfflineWindow(
+    lastSeenMs: lastSeenMs,
+    nowMs: nowMs,
+  );
+
+  lastSeenMs = offline.nextLastSeenMs(lastSeenMs);
   stdout.writeln('Final: ${offline.state.toJson()}');
 }
 ```
 
-## Demo
+## Capability demos
 
-Screenshot:
+Deterministic replay (same inputs -> same outputs):
 
-![idle_core demo](doc/images/demo1.png)
-![idle_core_demo](doc/images/demo2.png)
+```dart
+final actions = <IdleAction>[
+  const IdleTickAction(1000),
+  const IdleTickAction(1000),
+  const UpgradeRate(2),
+  const IdleTickAction(1000),
+];
 
-To create the screenshot, run the Flutter demo in `demo/` and capture the UI.
+final engineA = IdleEngine<GameState>(
+  config: IdleConfig<GameState>(),
+  reducer: reducer,
+  state: const GameState(gold: 0, rate: 1),
+);
+final engineB = IdleEngine<GameState>(
+  config: IdleConfig<GameState>(),
+  reducer: reducer,
+  state: const GameState(gold: 0, rate: 1),
+);
 
-## Why idle_core
+final replayA = engineA.replay(actions);
+final replayB = engineB.replay(actions);
+print(replayA.state.toJson() == replayB.state.toJson()); // true
+```
 
-idle_core is a deterministic, pure-Dart runtime for idle game logic.
-It is not an inactivity detector or platform plugin.
+Offline caps + leftover time visibility:
 
-- Deterministic tick simulation and offline progress
-- Replay-friendly reducers for save/load and debugging
-- Pure Dart core (no Flutter dependency)
-- Safety caps and chunking for large offline windows
+```dart
+final engine = IdleEngine<GameState>(
+  config: IdleConfig<GameState>(
+    dtMs: 1000,
+    maxOfflineMs: 60 * 1000,
+    maxTicksTotal: 5,
+  ),
+  reducer: reducer,
+  state: const GameState(gold: 0, rate: 1),
+);
 
-Comparison:
+final result = engine.applyOfflineWindow(lastSeenMs: 0, nowMs: 20 * 1000);
+print(result.ticksApplied); // 5
+print(result.unappliedDeltaMs); // 15000 (caps + partial ticks)
+```
 
-| Feature              | idle_core | idle detector packages |
-| -------------------- | --------- | ---------------------- |
-| Offline simulation   | Yes       | No                     |
-| Deterministic replay | Yes       | No                     |
-| Pure Dart runtime    | Yes       | No                     |
-| Inactivity detection | No        | Yes                    |
+Time control for tests:
 
-## Docs
+```dart
+final clock = ManualTickClock(0);
+final engine = IdleEngine<GameState>(
+  config: IdleConfig<GameState>(),
+  reducer: reducer,
+  state: const GameState(gold: 0, rate: 1),
+  clock: clock,
+);
 
-- `doc/guide.md` for determinism and offline rules.
+clock.advance(2500);
+final result = engine.applyOfflineFromClock(0);
+print(result.ticksApplied); // 2
+```
+
+See the runnable demos in `example/main.dart` and `example/replay_demo.dart`.
+
+## Core concepts
+
+State and reducer:
+
+- State is immutable and JSON-serializable.
+- Reducer is pure and deterministic.
+- Tick logic is driven by `IdleTickAction(dtMs)`.
+
+Determinism checklist:
+
+- Do not call `DateTime.now()` inside reducers.
+- Do not use randomness unless the seed is stored in state.
+- Only mutate state via returned copies.
+
+## Tick flow
+
+- `IdleEngine.tick(count)` applies `IdleTickAction(dtMs)` repeatedly.
+- `IdleEngine.step(dtMs, count)` uses a custom dt.
+- `IdleEngine.dispatch(action)` applies a non-tick action.
+- `IdleEngine.tickForDuration(deltaMs)` converts a duration to ticks.
+- `IdleEngine.replay(actions)` replays a deterministic action list.
+
+## Offline progress
+
+```dart
+final result = engine.applyOfflineWindow(
+  lastSeenMs: lastSeenMs,
+  nowMs: nowMs,
+);
+```
+
+Offline processing:
+
+- `delta = clamp(now - lastSeen, 0, maxOfflineMs)`
+- `ticks = floor(delta / dtMs)` then capped by `maxTicksTotal`
+- Work is chunked by `maxTicksPerChunk`
+
+Safety helpers:
+
+- `result.unappliedDeltaMs` reports leftover time (caps or partial ticks).
+- `result.wasBackwards` flags negative deltas.
+- `result.nextLastSeenMs(lastSeenMs)` advances by applied ticks.
+
+## Events and resource deltas
+
+Use `EventBus` to collect reducer events and `resourceDelta` to summarize state:
+
+```dart
+final bus = EventBus();
+final reducerWithEvents = (GameState state, IdleAction action) {
+  if (action is IdleTickAction) {
+    final nextGold = state.gold + state.rate;
+    if (state.gold < 10 && nextGold >= 10) {
+      bus.emit('milestone:gold-10');
+    }
+    return state.copyWith(gold: nextGold);
+  }
+  return state;
+};
+final config = IdleConfig<GameState>(
+  eventBus: bus,
+  resourceDelta: (before, after) => {
+    'gold': after.gold - before.gold,
+  },
+);
+final engine = IdleEngine<GameState>(
+  config: config,
+  reducer: reducerWithEvents,
+  state: const GameState(gold: 0, rate: 1),
+);
+
+engine.tick(count: 1);
+print(engine.tick().events);
+```
+
+## Tools
+
+Sanity-check determinism locally (includes upgrades + replay):
+
+```bash
+dart run tool/determinism_check.dart
+```
+
+The tool uses a non-tick action to validate replay order:
+
+```dart
+final actions = <IdleAction>[
+  const IdleTickAction(1000),
+  const UpgradeRate(2),
+  const IdleTickAction(1000),
+];
+```
+
+See `tool/determinism_check.dart` for the action definition.
+
+## Related packages
+
+- `idle_save` for save/load helpers and serialization patterns.
+- `idle_flutter` for Flutter lifecycle integration and timestamps.
 
 ## API overview
 
@@ -110,51 +259,11 @@ Comparison:
 - `EventBus` optionally collects events for result snapshots.
 - Helpers: `tickForDuration`, `applyOfflineFromClock`, `replay`, `advance`.
 
-## Core concepts
+## Comparison
 
-State and reducer:
-
-- State is immutable and JSON-serializable.
-- Reducer is pure and deterministic.
-- Tick logic is driven by `IdleTickAction(dtMs)`.
-
-Determinism rules:
-
-- No `DateTime.now()` inside the reducer.
-- No randomness without a seeded PRNG passed through state.
-
-## Offline progress
-
-```dart
-final result = engine.applyOffline(lastSeenMs, nowMs);
-```
-
-Offline processing:
-
-- `delta = clamp(now - lastSeen, 0, maxOfflineMs)`
-- `ticks = floor(delta / dtMs)` then capped by `maxTicksTotal`
-- Work is chunked by `maxTicksPerChunk`
-
-## Configuration
-
-`IdleConfig` fields:
-
-- `dtMs`: fixed tick size in milliseconds (default 1000)
-- `maxOfflineMs`: maximum offline window
-- `maxTicksTotal`: hard cap on total ticks applied
-- `maxTicksPerChunk`: chunk size for offline work
-- `resourceDelta`: optional `(before, after) -> Map<String, num>`
-- `eventBus`: optional `EventBus` to collect events
-
-## Results
-
-`TickResult` and `OfflineResult` include:
-
-- `ticksApplied`
-- `resourcesDelta` (if provided)
-- `events` (if `EventBus` is used)
-
-`OfflineResult` also includes:
-
-- `requestedDeltaMs`, `clampedDeltaMs`, `appliedDeltaMs`
-- `ticksRequested`, `ticksCapped`, `chunks`
+| Feature              | idle_core | idle detector packages |
+| -------------------- | --------- | ---------------------- |
+| Offline simulation   | Yes       | No                     |
+| Deterministic replay | Yes       | No                     |
+| Pure Dart runtime    | Yes       | No                     |
+| Inactivity detection | No        | Yes                    |

@@ -154,7 +154,44 @@ void main() {
     expect(result.ticksApplied, equals(0));
     expect(result.clampedDeltaMs, equals(0));
     expect(result.appliedDeltaMs, equals(0));
+    expect(result.wasBackwards, isTrue);
     expect(result.state.gold, equals(5));
+  });
+
+  test('offline exposes unapplied delta', () {
+    final engine = IdleEngine<TestState>(
+      config: IdleConfig<TestState>(dtMs: 1000),
+      reducer: reducer,
+      state: const TestState(gold: 0, rate: 1),
+    );
+
+    final result = engine.applyOffline(0, 3500);
+    expect(result.appliedDeltaMs, equals(3000));
+    expect(result.unappliedDeltaMs, equals(500));
+  });
+
+  test('applyOfflineWindow avoids parameter ordering mistakes', () {
+    final engine = IdleEngine<TestState>(
+      config: IdleConfig<TestState>(),
+      reducer: reducer,
+      state: const TestState(gold: 0, rate: 1),
+    );
+
+    final result = engine.applyOfflineWindow(lastSeenMs: 0, nowMs: 2500);
+    expect(result.ticksApplied, equals(2));
+    expect(result.state.gold, equals(2));
+  });
+
+  test('offline result computes next last-seen timestamp', () {
+    final engine = IdleEngine<TestState>(
+      config: IdleConfig<TestState>(),
+      reducer: reducer,
+      state: const TestState(gold: 0, rate: 1),
+    );
+
+    final result = engine.applyOffline(1000, 3500);
+    expect(result.appliedDeltaMs, equals(2000));
+    expect(result.nextLastSeenMs(1000), equals(3000));
   });
 
   test('offline from clock uses injected clock', () {
@@ -260,5 +297,14 @@ void main() {
 
     clock.advance(1234);
     expect(engine.clock.nowMs(), equals(1234));
+  });
+
+  test('manual clock supports set and advance', () {
+    final clock = ManualTickClock(1000);
+    expect(clock.nowMs(), equals(1000));
+    clock.advance(250);
+    expect(clock.nowMs(), equals(1250));
+    clock.setMs(42);
+    expect(clock.nowMs(), equals(42));
   });
 }
