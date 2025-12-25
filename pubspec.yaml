@@ -1,6 +1,6 @@
 name: idle_core
 description: Core runtime for idle game development with deterministic ticks, offline progress, and replay.
-version: 0.2.0
+version: 0.2.1
 repository: https://github.com/tac0de/idle_core
 
 environment:

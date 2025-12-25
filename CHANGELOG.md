@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0
+## 0.2.1
 
 - Use UpgradeRate in determinism tool and document its usage.
 - Remove doc folder and move guidance into README.

@@ -19,7 +19,7 @@ Add the dependency:
 
 ```yaml
 dependencies:
-  idle_core: ^0.1.9
+  idle_core: ^0.2.1
 ```
 
 Minimal usage:
