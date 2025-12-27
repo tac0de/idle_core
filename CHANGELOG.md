@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0
+
+- Add save/versioning helpers with `IdleStateCodec` and `IdleSaveCodec`.
+- Add `IdleSession` and `IdleGame` to reduce boilerplate and prevent last-seen mistakes.
+- Document recommended SDK flow with migrations and save snapshots.
+
 ## 0.2.2
 
 - Deprecate the `advance` alias to prevent argument-order mistakes.

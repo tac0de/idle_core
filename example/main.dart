@@ -21,6 +21,14 @@ class EconomyState extends IdleState {
     );
   }
 
+  /// Creates a state from JSON.
+  factory EconomyState.fromJson(Map<String, dynamic> json) {
+    return EconomyState(
+      gold: json['gold'] as int,
+      rate: json['rate'] as int,
+    );
+  }
+
   /// Converts state to JSON.
   @override
   Map<String, dynamic> toJson() => {'gold': gold, 'rate': rate};
@@ -48,7 +56,11 @@ EconomyState reducer(EconomyState state, IdleAction action) {
 
 /// Runs the example simulation.
 void main() {
-  final engine = IdleEngine<EconomyState>(
+  final stateCodec = IdleStateCodec<EconomyState>(
+    schemaVersion: 1,
+    fromJson: EconomyState.fromJson,
+  );
+  final game = IdleGame<EconomyState>(
     config: IdleConfig<EconomyState>(
       dtMs: 1000,
       resourceDelta: (before, after) => {
@@ -56,22 +68,23 @@ void main() {
       },
     ),
     reducer: reducer,
+    stateCodec: stateCodec,
+  );
+
+  final session = game.createSession(
     state: const EconomyState(gold: 0, rate: 1),
+    lastSeenMs: 0,
   );
 
-  engine.tick(count: 5);
-  engine.dispatch(const UpgradeRate(2));
-  engine.tick(count: 3);
+  session.engine.tick(count: 5);
+  session.engine.dispatch(const UpgradeRate(2));
+  session.engine.tick(count: 3);
 
-  var lastSeenMs = 0;
   const nowMs = 10 * 1000;
-  final offline = engine.applyOfflineWindow(
-    lastSeenMs: lastSeenMs,
-    nowMs: nowMs,
-  );
-
-  lastSeenMs = offline.nextLastSeenMs(lastSeenMs);
+  final offline = session.applyOffline(nowMs: nowMs);
+  final saveJson = session.snapshotJson(game.saveCodec, nowMs: nowMs);
   stdout.writeln('Final: ${offline.state.toJson()}');
   stdout.writeln('Offline ticks: ${offline.ticksApplied}');
   stdout.writeln('Unapplied ms: ${offline.unappliedDeltaMs}');
+  stdout.writeln('Save JSON: $saveJson');
 }
