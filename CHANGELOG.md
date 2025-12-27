@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- Refresh README with a compact SDK-focused guide and contact info.
+- Update package description to reflect SDK positioning.
+
 ## 0.3.0
 
 - Add save/versioning helpers with `IdleStateCodec` and `IdleSaveCodec`.
