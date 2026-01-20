@@ -1,16 +1,21 @@
 # idle_core
 
-Deterministic idle game core engine SDK for Dart: fixed ticks, offline progress,
-replay, and versioned saves. Pure Dart, no Flutter dependency.
+Deterministic state simulation core for Dart: fixed ticks, offline progression,
+replay, and versioned snapshots. Pure Dart, no Flutter dependency.
 
-**I am genuinely excited to release this updated version and finally hit the SDK-grade quality. 🚀✨**
+## Design principles
 
-## What you get
+- Determinism: reducers are pure; no wall-clock reads inside state transitions.
+- Replayability: the same actions always produce the same state.
+- Explainability: results include ticks applied, caps, and unapplied time.
+- Offline-first: long gaps are applied in capped chunks for safety.
+- Platform-agnostic: no UI, storage, network, or AI dependencies.
 
-- Deterministic tick simulation and replay.
-- First-class offline progress with caps and diagnostics.
-- Version-safe saves with explicit migrations.
-- Session helpers that keep `lastSeenMs` correct.
+## Out of scope
+
+- UI frameworks (Flutter/Widgets) and lifecycle integration.
+- Storage adapters, encryption/signing, or cloud sync.
+- Networking, AI/LLM calls, or platform services.
 
 ## Install
 
@@ -24,99 +29,114 @@ dependencies:
 ```dart
 import 'package:idle_core/idle_core.dart';
 
-class GameState extends IdleState {
-  final int gold;
+class SimState extends SimulationState {
+  final int counter;
   final int rate;
-  const GameState({required this.gold, required this.rate});
+  const SimState({required this.counter, required this.rate});
 
-  GameState copyWith({int? gold, int? rate}) {
-    return GameState(
-      gold: gold ?? this.gold,
+  SimState copyWith({int? counter, int? rate}) {
+    return SimState(
+      counter: counter ?? this.counter,
       rate: rate ?? this.rate,
     );
   }
 
-  factory GameState.fromJson(Map<String, dynamic> json) {
-    return GameState(
-      gold: json['gold'] as int,
+  factory SimState.fromJson(Map<String, dynamic> json) {
+    return SimState(
+      counter: json['counter'] as int,
       rate: json['rate'] as int,
     );
   }
 
   @override
-  Map<String, dynamic> toJson() => {'gold': gold, 'rate': rate};
+  Map<String, dynamic> toJson() => {'counter': counter, 'rate': rate};
 }
 
-GameState reducer(GameState state, IdleAction action) {
-  if (action is IdleTickAction) {
-    return state.copyWith(gold: state.gold + state.rate);
+SimState reducer(SimState state, SimulationAction action) {
+  if (action is TickAction) {
+    return state.copyWith(counter: state.counter + state.rate);
   }
   return state;
 }
 
 void main() {
-  final game = IdleGame<GameState>(
-    config: IdleConfig<GameState>(dtMs: 1000),
+  final config = SimulationConfig(dtMs: 1000);
+  final engine = SimulationEngine<SimState>(
+    config: config,
     reducer: reducer,
-    stateCodec: IdleStateCodec<GameState>(
+    state: const SimState(counter: 0, rate: 1),
+  );
+  final snapshotCodec = SnapshotCodec<SimState>(
+    stateCodec: StateCodec<SimState>(
       schemaVersion: 1,
-      fromJson: GameState.fromJson,
+      fromJson: SimState.fromJson,
     ),
   );
 
-  final session = game.createSession(
-    state: const GameState(gold: 0, rate: 1),
-    lastSeenMs: 0,
+  var lastObservedMs = 0;
+
+  engine.tick(count: 5);
+  final offline = engine.applyOffline(
+    lastObservedMs: lastObservedMs,
+    nowMs: 10 * 1000,
+  );
+  lastObservedMs = offline.nextLastObservedMs(lastObservedMs);
+  final snapshot = snapshotCodec.encodeState(
+    state: engine.state,
+    lastObservedMs: lastObservedMs,
   );
 
-  session.engine.tick(count: 5);
-  final offline = session.applyOffline(nowMs: 10 * 1000);
-  final saveJson = session.snapshotJson(game.saveCodec, nowMs: 10 * 1000);
-
-  print(offline.state.toJson());
-  print(saveJson);
+  print(engine.state.toJson());
+  print(snapshot);
 }
 ```
 
 ## Offline flow (recommended)
 
 ```dart
-final offline = session.applyOffline(nowMs: nowMs);
-final saveJson = session.snapshotJson(game.saveCodec, nowMs: nowMs);
+final offline = engine.applyOffline(
+  lastObservedMs: lastObservedMs,
+  nowMs: nowMs,
+);
+lastObservedMs = offline.nextLastObservedMs(lastObservedMs);
+final snapshot = snapshotCodec.encodeState(
+  state: engine.state,
+  lastObservedMs: lastObservedMs,
+);
 ```
 
-## Saves and migrations
+## Snapshots and migrations
 
 ```dart
-final codec = IdleStateCodec<GameState>(
+final codec = StateCodec<SimState>(
   schemaVersion: 2,
-  fromJson: GameState.fromJson,
+  fromJson: SimState.fromJson,
   migrations: {
     0: (json) => <String, dynamic>{...json, 'rate': 1},
     1: (json) {
       final updated = Map<String, dynamic>.from(json);
-      updated['gold'] = updated.remove('coins') ?? 0;
+      updated['counter'] = updated.remove('count') ?? 0;
       return updated;
     },
   },
 );
 ```
 
+## Replay
+
+```dart
+final result = engine.replay(actions);
+```
+
 ## API snapshot
 
-- `IdleEngine`, `IdleConfig`
-- `IdleState`, `IdleReducer`
-- `IdleStateCodec`, `IdleSave`, `IdleSaveCodec`
-- `IdleSession`, `IdleGame`
-- `TickClock`, `OfflineApplier`
+- `SimulationEngine`, `SimulationConfig`
+- `SimulationState`, `SimulationReducer`
+- `StateCodec`, `Snapshot`, `SnapshotCodec`
+- `SimulationClock`, `OfflineRunner`
 - `TickResult`, `OfflineResult`
-- `EventBus` (optional)
-
-## Companion packages
-
-- `idle_save` for storage adapters and encryption/signing.
-- `idle_flutter` for Flutter lifecycle integration.
 
 ## Contact
 
-If you find interest in collaborating/contribution or have questions, reach out at wonyoungchoiseoul@gmail.com.
+If you find interest in collaborating/contribution or have questions, reach out at
+wonyoungchoiseoul@gmail.com.

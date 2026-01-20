@@ -2,53 +2,53 @@ import 'dart:io';
 
 import 'package:idle_core/idle_core.dart';
 
-/// Example state for a simple idle economy.
-class EconomyState extends IdleState {
-  /// Current gold amount.
-  final int gold;
+/// Example state for a simple tick-driven counter.
+class CounterState extends SimulationState {
+  /// Current counter value.
+  final int counter;
 
-  /// Gold earned per tick.
+  /// Increment per tick.
   final int rate;
 
-  /// Creates a new economy state.
-  const EconomyState({required this.gold, required this.rate});
+  /// Creates a new counter state.
+  const CounterState({required this.counter, required this.rate});
 
   /// Returns a copy with updated values.
-  EconomyState copyWith({int? gold, int? rate}) {
-    return EconomyState(
-      gold: gold ?? this.gold,
+  CounterState copyWith({int? counter, int? rate}) {
+    return CounterState(
+      counter: counter ?? this.counter,
       rate: rate ?? this.rate,
     );
   }
 
   /// Creates a state from JSON.
-  factory EconomyState.fromJson(Map<String, dynamic> json) {
-    return EconomyState(
-      gold: json['gold'] as int,
+  factory CounterState.fromJson(Map<String, dynamic> json) {
+    return CounterState(
+      counter: json['counter'] as int,
       rate: json['rate'] as int,
     );
   }
 
   /// Converts state to JSON.
   @override
-  Map<String, dynamic> toJson() => {'gold': gold, 'rate': rate};
+  Map<String, dynamic> toJson() => {'counter': counter, 'rate': rate};
 }
 
-/// Action that upgrades the gold rate.
-class UpgradeRate extends IdleAction {
+/// Action that adjusts the rate.
+class AdjustRate extends SimulationAction {
   /// Amount to add to the rate.
   final int delta;
 
-  /// Creates an upgrade action.
-  const UpgradeRate(this.delta);
+  /// Creates an adjust action.
+  const AdjustRate(this.delta);
 }
 
-/// Reducer for the example economy.
-EconomyState reducer(EconomyState state, IdleAction action) {
-  if (action is IdleTickAction) {
-    return state.copyWith(gold: state.gold + state.rate);
+/// Reducer for the example state.
+CounterState reducer(CounterState state, SimulationAction action) {
+  if (action is TickAction) {
+    return state.copyWith(counter: state.counter + state.rate);
   }
-  if (action is UpgradeRate) {
+  if (action is AdjustRate) {
     return state.copyWith(rate: state.rate + action.delta);
   }
   return state;
@@ -56,35 +56,36 @@ EconomyState reducer(EconomyState state, IdleAction action) {
 
 /// Runs the example simulation.
 void main() {
-  final stateCodec = IdleStateCodec<EconomyState>(
+  final stateCodec = StateCodec<CounterState>(
     schemaVersion: 1,
-    fromJson: EconomyState.fromJson,
+    fromJson: CounterState.fromJson,
   );
-  final game = IdleGame<EconomyState>(
-    config: IdleConfig<EconomyState>(
-      dtMs: 1000,
-      resourceDelta: (before, after) => {
-        'gold': after.gold - before.gold,
-      },
-    ),
+  final config = SimulationConfig(dtMs: 1000);
+  final engine = SimulationEngine<CounterState>(
+    config: config,
     reducer: reducer,
-    stateCodec: stateCodec,
+    state: const CounterState(counter: 0, rate: 1),
   );
 
-  final session = game.createSession(
-    state: const EconomyState(gold: 0, rate: 1),
-    lastSeenMs: 0,
-  );
+  var lastObservedMs = 0;
 
-  session.engine.tick(count: 5);
-  session.engine.dispatch(const UpgradeRate(2));
-  session.engine.tick(count: 3);
+  engine.tick(count: 5);
+  engine.dispatch(const AdjustRate(2));
+  engine.tick(count: 3);
 
   const nowMs = 10 * 1000;
-  final offline = session.applyOffline(nowMs: nowMs);
-  final saveJson = session.snapshotJson(game.saveCodec, nowMs: nowMs);
-  stdout.writeln('Final: ${offline.state.toJson()}');
+  final offline = engine.applyOffline(
+    lastObservedMs: lastObservedMs,
+    nowMs: nowMs,
+  );
+  lastObservedMs = offline.nextLastObservedMs(lastObservedMs);
+  final snapshotCodec = SnapshotCodec<CounterState>(stateCodec: stateCodec);
+  final snapshotJson = snapshotCodec.encodeState(
+    state: engine.state,
+    lastObservedMs: lastObservedMs,
+  );
+  stdout.writeln('Final: ${engine.state.toJson()}');
   stdout.writeln('Offline ticks: ${offline.ticksApplied}');
   stdout.writeln('Unapplied ms: ${offline.unappliedDeltaMs}');
-  stdout.writeln('Save JSON: $saveJson');
+  stdout.writeln('Snapshot JSON: $snapshotJson');
 }

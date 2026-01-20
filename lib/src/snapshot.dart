@@ -1,46 +1,46 @@
 import 'state.dart';
 
-/// Decodes JSON into a typed [IdleState].
-typedef IdleStateDecoder<S extends IdleState> = S Function(
+/// Decodes JSON into a typed [SimulationState].
+typedef StateDecoder<S extends SimulationState> = S Function(
   Map<String, dynamic> json,
 );
 
-/// Encodes a typed [IdleState] to JSON.
-typedef IdleStateEncoder<S extends IdleState> = Map<String, dynamic> Function(
+/// Encodes a typed [SimulationState] to JSON.
+typedef StateEncoder<S extends SimulationState> = Map<String, dynamic> Function(
   S state,
 );
 
 /// Migrates JSON from one schema version to the next.
-typedef IdleStateMigration = Map<String, dynamic> Function(
+typedef StateMigration = Map<String, dynamic> Function(
   Map<String, dynamic> json,
 );
 
-Map<String, dynamic> _defaultStateEncoder<S extends IdleState>(S state) {
+Map<String, dynamic> _defaultStateEncoder<S extends SimulationState>(S state) {
   return state.toJson();
 }
 
 /// Codec describing how to encode, decode, and migrate state versions.
-class IdleStateCodec<S extends IdleState> {
+class StateCodec<S extends SimulationState> {
   /// Current schema version.
   final int schemaVersion;
 
   /// Decoder for the latest schema version.
-  final IdleStateDecoder<S> fromJson;
+  final StateDecoder<S> fromJson;
 
   /// Encoder for the latest schema version.
-  final IdleStateEncoder<S> toJson;
+  final StateEncoder<S> toJson;
 
   /// Migrations keyed by the source version (to source + 1).
-  final Map<int, IdleStateMigration> migrations;
+  final Map<int, StateMigration> migrations;
 
   /// Creates a codec with optional migrations.
-  IdleStateCodec({
+  StateCodec({
     required this.schemaVersion,
     required this.fromJson,
-    IdleStateEncoder<S>? toJson,
-    Map<int, IdleStateMigration>? migrations,
+    StateEncoder<S>? toJson,
+    Map<int, StateMigration>? migrations,
   })  : toJson = toJson ?? _defaultStateEncoder,
-        migrations = migrations ?? const <int, IdleStateMigration>{} {
+        migrations = migrations ?? const <int, StateMigration>{} {
     if (schemaVersion < 0) {
       throw ArgumentError.value(
         schemaVersion,
@@ -57,7 +57,7 @@ class IdleStateCodec<S extends IdleState> {
     }
     if (fromVersion > schemaVersion) {
       throw StateError(
-        'Save schema $fromVersion is newer than codec $schemaVersion.',
+        'Snapshot schema $fromVersion is newer than codec $schemaVersion.',
       );
     }
     var current = Map<String, dynamic>.from(json);
@@ -76,91 +76,91 @@ class IdleStateCodec<S extends IdleState> {
   }
 }
 
-/// Snapshot of state and last-seen time used for persistence.
-class IdleSave<S extends IdleState> {
-  /// State at save time.
+/// Snapshot of state and last-observed time used for persistence.
+class Snapshot<S extends SimulationState> {
+  /// State at snapshot time.
   final S state;
 
-  /// Last time the player was seen (ms since epoch).
-  final int lastSeenMs;
+  /// Last time the state was observed (ms since epoch).
+  final int lastObservedMs;
 
   /// Schema version used to encode the state.
   final int schemaVersion;
 
-  /// Creates a save snapshot.
-  const IdleSave({
+  /// Creates a snapshot.
+  const Snapshot({
     required this.state,
-    required this.lastSeenMs,
+    required this.lastObservedMs,
     required this.schemaVersion,
   });
 }
 
-/// JSON encoder/decoder for [IdleSave] snapshots.
-class IdleSaveCodec<S extends IdleState> {
+/// JSON encoder/decoder for [Snapshot] snapshots.
+class SnapshotCodec<S extends SimulationState> {
   /// State codec used for migrations and typed decoding.
-  final IdleStateCodec<S> stateCodec;
+  final StateCodec<S> stateCodec;
 
-  /// Key for schema version in the save JSON.
+  /// Key for schema version in the snapshot JSON.
   final String schemaVersionKey;
 
-  /// Key for last-seen timestamp in the save JSON.
-  final String lastSeenMsKey;
+  /// Key for last-observed timestamp in the snapshot JSON.
+  final String lastObservedMsKey;
 
-  /// Key for state JSON in the save JSON.
+  /// Key for state JSON in the snapshot JSON.
   final String stateKey;
 
-  /// Creates a save codec with JSON keys.
-  const IdleSaveCodec({
+  /// Creates a snapshot codec with JSON keys.
+  const SnapshotCodec({
     required this.stateCodec,
     this.schemaVersionKey = 'schemaVersion',
-    this.lastSeenMsKey = 'lastSeenMs',
+    this.lastObservedMsKey = 'lastObservedMs',
     this.stateKey = 'state',
   });
 
-  /// Captures a typed save snapshot.
-  IdleSave<S> capture({required S state, required int lastSeenMs}) {
-    if (lastSeenMs < 0) {
-      throw ArgumentError.value(lastSeenMs, 'lastSeenMs', 'Must be >= 0');
+  /// Captures a typed snapshot.
+  Snapshot<S> capture({required S state, required int lastObservedMs}) {
+    if (lastObservedMs < 0) {
+      throw ArgumentError.value(lastObservedMs, 'lastObservedMs', 'Must be >= 0');
     }
-    return IdleSave<S>(
+    return Snapshot<S>(
       state: state,
-      lastSeenMs: lastSeenMs,
+      lastObservedMs: lastObservedMs,
       schemaVersion: stateCodec.schemaVersion,
     );
   }
 
-  /// Encodes a typed save snapshot to JSON.
-  Map<String, dynamic> encode(IdleSave<S> save) {
+  /// Encodes a typed snapshot to JSON.
+  Map<String, dynamic> encode(Snapshot<S> snapshot) {
     return <String, dynamic>{
-      schemaVersionKey: save.schemaVersion,
-      lastSeenMsKey: save.lastSeenMs,
-      stateKey: stateCodec.toJson(save.state),
+      schemaVersionKey: snapshot.schemaVersion,
+      lastObservedMsKey: snapshot.lastObservedMs,
+      stateKey: stateCodec.toJson(snapshot.state),
     };
   }
 
-  /// Encodes a state + last-seen into JSON for persistence.
+  /// Encodes a state + last-observed timestamp into JSON for persistence.
   Map<String, dynamic> encodeState({
     required S state,
-    required int lastSeenMs,
+    required int lastObservedMs,
   }) {
-    return encode(capture(state: state, lastSeenMs: lastSeenMs));
+    return encode(capture(state: state, lastObservedMs: lastObservedMs));
   }
 
-  /// Decodes JSON into a typed save snapshot, migrating as needed.
-  IdleSave<S> decode(
+  /// Decodes JSON into a typed snapshot, migrating as needed.
+  Snapshot<S> decode(
     Map<String, dynamic> json, {
-    int? fallbackLastSeenMs,
+    int? fallbackLastObservedMs,
   }) {
     final rawVersion = json[schemaVersionKey];
     final version = rawVersion is int ? rawVersion : 0;
     if (version < 0) {
       throw const FormatException('schemaVersion must be >= 0.');
     }
-    final rawLastSeenMs = json[lastSeenMsKey];
-    final lastSeenMs =
-        rawLastSeenMs is int ? rawLastSeenMs : fallbackLastSeenMs;
-    if (lastSeenMs == null) {
-      throw FormatException('Missing or invalid $lastSeenMsKey.');
+    final rawLastObservedMs = json[lastObservedMsKey];
+    final lastObservedMs =
+        rawLastObservedMs is int ? rawLastObservedMs : fallbackLastObservedMs;
+    if (lastObservedMs == null) {
+      throw FormatException('Missing or invalid $lastObservedMsKey.');
     }
     final rawState = json[stateKey];
     if (rawState is! Map) {
@@ -169,9 +169,9 @@ class IdleSaveCodec<S extends IdleState> {
     final stateJson = Map<String, dynamic>.from(rawState);
     final migrated = stateCodec.migrate(stateJson, version);
     final state = stateCodec.fromJson(migrated);
-    return IdleSave<S>(
+    return Snapshot<S>(
       state: state,
-      lastSeenMs: lastSeenMs,
+      lastObservedMs: lastObservedMs,
       schemaVersion: stateCodec.schemaVersion,
     );
   }

@@ -1,14 +1,14 @@
-/// Base class for actions processed by an [IdleReducer].
-abstract class IdleAction {
+/// Base class for actions processed by a [SimulationReducer].
+abstract class SimulationAction {
   /// Creates an action instance.
-  const IdleAction();
+  const SimulationAction();
 }
 
 /// Action dispatched for each simulated tick.
-class IdleTickAction extends IdleAction {
+class TickAction extends SimulationAction {
   /// Tick duration in milliseconds.
   final int dtMs;
 
   /// Creates a tick action with the given [dtMs].
-  const IdleTickAction(this.dtMs);
+  const TickAction(this.dtMs);
 }

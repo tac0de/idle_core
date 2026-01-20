@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0
+
+- Rename core APIs to domain-neutral simulation terms (`SimulationEngine`,
+  `SimulationState`, `SimulationAction`, `SnapshotCodec`, etc.).
+- Remove convenience wrappers (`SimulationSession`, `SimulationDefinition`) to
+  keep the core minimal and explicit.
+- Remove event hooks and resource delta summaries from results/config.
+- Rework README/examples to match the focused deterministic simulation core.
+
 ## 0.3.1
 
 - Refresh README with a compact SDK-focused guide and contact info.
@@ -7,7 +16,7 @@
 
 ## 0.3.0
 
-- Add save/versioning helpers with `IdleStateCodec` and `IdleSaveCodec`.
+- Add save/versioning helpers with `StateCodec` and `SnapshotCodec`.
 - Add `IdleSession` and `IdleGame` to reduce boilerplate and prevent last-seen mistakes.
 - Document recommended SDK flow with migrations and save snapshots.
 

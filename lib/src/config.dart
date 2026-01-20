@@ -1,14 +1,5 @@
-import 'event_bus.dart';
-import 'state.dart';
-
-/// Computes a summary delta from [before] to [after].
-typedef ResourceDelta<S extends IdleState> = Map<String, num> Function(
-  S before,
-  S after,
-);
-
-/// Configuration for tick size, offline caps, and optional hooks.
-class IdleConfig<S extends IdleState> {
+/// Configuration for tick size and offline caps.
+class SimulationConfig {
   /// Fixed tick duration in milliseconds.
   final int dtMs;
 
@@ -21,20 +12,12 @@ class IdleConfig<S extends IdleState> {
   /// Number of ticks to apply per offline chunk.
   final int maxTicksPerChunk;
 
-  /// Optional delta calculator for results.
-  final ResourceDelta<S>? resourceDelta;
-
-  /// Optional event bus for reducer events.
-  final EventBus? eventBus;
-
   /// Creates a config with fixed tick size and safety caps.
-  IdleConfig({
+  SimulationConfig({
     this.dtMs = 1000,
     this.maxOfflineMs = 1000 * 60 * 60 * 24,
     this.maxTicksTotal = 100000,
     this.maxTicksPerChunk = 1000,
-    this.resourceDelta,
-    this.eventBus,
   }) {
     if (dtMs <= 0) {
       throw ArgumentError.value(dtMs, 'dtMs', 'Must be > 0');

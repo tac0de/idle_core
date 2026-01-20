@@ -2,33 +2,33 @@ import 'dart:io';
 
 import 'package:idle_core/idle_core.dart';
 
-class _CheckState extends IdleState {
-  final int gold;
+class _CheckState extends SimulationState {
+  final int counter;
   final int rate;
 
-  const _CheckState({required this.gold, required this.rate});
+  const _CheckState({required this.counter, required this.rate});
 
-  _CheckState copyWith({int? gold, int? rate}) {
+  _CheckState copyWith({int? counter, int? rate}) {
     return _CheckState(
-      gold: gold ?? this.gold,
+      counter: counter ?? this.counter,
       rate: rate ?? this.rate,
     );
   }
 
   @override
-  Map<String, dynamic> toJson() => {'gold': gold, 'rate': rate};
+  Map<String, dynamic> toJson() => {'counter': counter, 'rate': rate};
 }
 
-class UpgradeRate extends IdleAction {
+class AdjustRate extends SimulationAction {
   final int delta;
-  const UpgradeRate(this.delta);
+  const AdjustRate(this.delta);
 }
 
-_CheckState _reducer(_CheckState state, IdleAction action) {
-  if (action is IdleTickAction) {
-    return state.copyWith(gold: state.gold + state.rate);
+_CheckState _reducer(_CheckState state, SimulationAction action) {
+  if (action is TickAction) {
+    return state.copyWith(counter: state.counter + state.rate);
   }
-  if (action is UpgradeRate) {
+  if (action is AdjustRate) {
     return state.copyWith(rate: state.rate + action.delta);
   }
   return state;
@@ -36,55 +36,55 @@ _CheckState _reducer(_CheckState state, IdleAction action) {
 
 /// Runs a determinism sanity check for replay and offline ticks.
 void main() {
-  final config = IdleConfig<_CheckState>(
+  final config = SimulationConfig(
     dtMs: 1000,
     maxOfflineMs: 20000,
     maxTicksTotal: 100,
     maxTicksPerChunk: 5,
   );
 
-  final actions = <IdleAction>[
-    const IdleTickAction(1000),
-    const UpgradeRate(2),
-    const IdleTickAction(1000),
-    const IdleTickAction(1000),
+  final actions = <SimulationAction>[
+    const TickAction(1000),
+    const AdjustRate(2),
+    const TickAction(1000),
+    const TickAction(1000),
   ];
 
-  final replayA = IdleEngine<_CheckState>(
+  final replayA = SimulationEngine<_CheckState>(
     config: config,
     reducer: _reducer,
-    state: const _CheckState(gold: 0, rate: 1),
+    state: const _CheckState(counter: 0, rate: 1),
   ).replay(actions);
 
-  final replayB = IdleEngine<_CheckState>(
+  final replayB = SimulationEngine<_CheckState>(
     config: config,
     reducer: _reducer,
-    state: const _CheckState(gold: 0, rate: 1),
+    state: const _CheckState(counter: 0, rate: 1),
   ).replay(actions);
 
-  if (replayA.state.gold != replayB.state.gold ||
+  if (replayA.state.counter != replayB.state.counter ||
       replayA.state.rate != replayB.state.rate) {
     throw StateError('Replay determinism failed');
   }
 
   for (var ticks = 0; ticks <= 20; ticks++) {
-    final engineA = IdleEngine<_CheckState>(
+    final engineA = SimulationEngine<_CheckState>(
       config: config,
       reducer: _reducer,
-      state: const _CheckState(gold: 0, rate: 1),
+      state: const _CheckState(counter: 0, rate: 1),
     );
-    final engineB = IdleEngine<_CheckState>(
+    final engineB = SimulationEngine<_CheckState>(
       config: config,
       reducer: _reducer,
-      state: const _CheckState(gold: 0, rate: 1),
+      state: const _CheckState(counter: 0, rate: 1),
     );
 
-    engineA.dispatch(const UpgradeRate(1));
-    engineB.dispatch(const UpgradeRate(1));
-    engineA.applyOffline(0, ticks * 1000);
+    engineA.dispatch(const AdjustRate(1));
+    engineB.dispatch(const AdjustRate(1));
+    engineA.applyOffline(lastObservedMs: 0, nowMs: ticks * 1000);
     engineB.tick(count: ticks);
 
-    if (engineA.state.gold != engineB.state.gold ||
+    if (engineA.state.counter != engineB.state.counter ||
         engineA.state.rate != engineB.state.rate) {
       throw StateError('Mismatch at $ticks ticks');
     }

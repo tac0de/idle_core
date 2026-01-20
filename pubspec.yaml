@@ -1,6 +1,6 @@
 name: idle_core
-description: Core idle game engine SDK for Dart with deterministic ticks, offline progress, replay, and versioned saves.
-version: 0.3.1
+description: Deterministic state simulation core for Dart with fixed ticks, offline progress, replay, and versioned snapshots.
+version: 0.4.0
 repository: https://github.com/tac0de/idle_core
 
 environment:

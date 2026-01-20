@@ -6,37 +6,40 @@ import 'state.dart';
 import 'offline_helpers.dart';
 
 /// Applies offline progress using millisecond timestamps.
-abstract class OfflineApplier<S extends IdleState> {
-  /// Applies offline progress from [lastSeenMs] to [nowMs].
-  OfflineResult<S> applyOffline(int lastSeenMs, int nowMs);
+abstract class OfflineRunner<S extends SimulationState> {
+  /// Applies offline progress from [lastObservedMs] to [nowMs].
+  OfflineResult<S> applyOffline({
+    required int lastObservedMs,
+    int? nowMs,
+  });
 }
 
-/// Deterministic idle engine that applies ticks and offline progress.
-class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
+/// Deterministic simulation engine that applies ticks and offline progress.
+class SimulationEngine<S extends SimulationState> implements OfflineRunner<S> {
   /// Engine configuration with tick size and safety caps.
-  final IdleConfig<S> config;
+  final SimulationConfig config;
 
   /// Reducer that maps actions to new state.
-  final IdleReducer<S> reducer;
+  final SimulationReducer<S> reducer;
 
   /// Clock used for time-based helpers.
-  final TickClock clock;
+  final SimulationClock clock;
 
   S _state;
 
   /// Creates an engine with config, reducer, and initial [state].
-  IdleEngine({
+  SimulationEngine({
     required this.config,
     required this.reducer,
     required S state,
-    TickClock? clock,
+    SimulationClock? clock,
   })  : _state = state,
-        clock = clock ?? SystemTickClock();
+        clock = clock ?? SystemSimulationClock();
 
   /// Current state snapshot.
   S get state => _state;
 
-  /// Applies [count] ticks using the configured [IdleConfig.dtMs].
+  /// Applies [count] ticks using the configured [SimulationConfig.dtMs].
   TickResult<S> tick({int count = 1}) {
     return step(config.dtMs, count: count);
   }
@@ -49,37 +52,34 @@ class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
     if (count < 0) {
       throw ArgumentError.value(count, 'count', 'Must be >= 0');
     }
-    final before = _state;
-    final action = IdleTickAction(dtMs);
+    final action = TickAction(dtMs);
     for (var i = 0; i < count; i++) {
       _state = reducer(_state, action);
     }
-    return _tickResult(before, count);
+    return _tickResult(count);
   }
 
   /// Applies a non-tick [action] and returns a result snapshot.
-  TickResult<S> dispatch(IdleAction action) {
-    final before = _state;
+  TickResult<S> dispatch(SimulationAction action) {
     _state = reducer(_state, action);
-    return _tickResult(before, 0);
+    return _tickResult(0);
   }
 
   /// Applies all [actions] in order and returns a result snapshot.
   ///
-  /// The returned [TickResult.ticksApplied] counts only [IdleTickAction] items.
-  TickResult<S> replay(Iterable<IdleAction> actions) {
-    final before = _state;
+  /// The returned [TickResult.ticksApplied] counts only [TickAction] items.
+  TickResult<S> replay(Iterable<SimulationAction> actions) {
     var ticksApplied = 0;
     for (final action in actions) {
-      if (action is IdleTickAction) {
+      if (action is TickAction) {
         ticksApplied += 1;
       }
       _state = reducer(_state, action);
     }
-    return _tickResult(before, ticksApplied);
+    return _tickResult(ticksApplied);
   }
 
-  /// Applies ticks for the given [deltaMs] duration using [IdleConfig.dtMs].
+  /// Applies ticks for the given [deltaMs] duration using [SimulationConfig.dtMs].
   ///
   /// Any remainder smaller than one tick is discarded.
   TickResult<S> tickForDuration(int deltaMs) {
@@ -87,23 +87,14 @@ class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
     return tick(count: ticks);
   }
 
-  /// Applies offline progress from [lastSeenMs] to the current clock time.
-  OfflineResult<S> applyOfflineFromClock(int lastSeenMs) {
-    return applyOffline(lastSeenMs, clock.nowMs());
-  }
-
-  /// Convenience alias for [applyOffline].
-  @Deprecated(
-    'Use applyOfflineWindow(lastSeenMs: ..., nowMs: ...) to avoid argument order mistakes.',
-  )
-  OfflineResult<S> advance(int nowMs, int lastSeenMs) {
-    return applyOffline(lastSeenMs, nowMs);
-  }
-
-  /// Applies offline progress from [lastSeenMs] to [nowMs].
+  /// Applies offline progress from [lastObservedMs] to [nowMs].
   @override
-  OfflineResult<S> applyOffline(int lastSeenMs, int nowMs) {
-    final requestedDeltaMs = nowMs - lastSeenMs;
+  OfflineResult<S> applyOffline({
+    required int lastObservedMs,
+    int? nowMs,
+  }) {
+    final now = nowMs ?? clock.nowMs();
+    final requestedDeltaMs = now - lastObservedMs;
     final clampedDeltaMs = clampOfflineDeltaMs(
       requestedDeltaMs,
       config.maxOfflineMs,
@@ -115,10 +106,9 @@ class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
     final wasClamped = requestedDeltaMs != clampedDeltaMs;
     final wasCapped = ticksRequested != ticksCapped;
 
-    final before = _state;
     var ticksApplied = 0;
     var chunks = 0;
-    final action = IdleTickAction(config.dtMs);
+    final action = TickAction(config.dtMs);
 
     while (ticksApplied < ticksCapped) {
       final remaining = ticksCapped - ticksApplied;
@@ -145,41 +135,13 @@ class IdleEngine<S extends IdleState> implements OfflineApplier<S> {
       wasClamped: wasClamped,
       wasCapped: wasCapped,
       appliedDeltaMs: appliedDeltaMs,
-      resourcesDelta: _resourceDelta(before, _state),
-      events: _drainEvents(),
     );
   }
 
-  /// Applies offline progress with named parameters to avoid ordering mistakes.
-  OfflineResult<S> applyOfflineWindow({
-    required int lastSeenMs,
-    required int nowMs,
-  }) {
-    return applyOffline(lastSeenMs, nowMs);
-  }
-
-  TickResult<S> _tickResult(S before, int ticksApplied) {
+  TickResult<S> _tickResult(int ticksApplied) {
     return TickResult<S>(
       state: _state,
       ticksApplied: ticksApplied,
-      resourcesDelta: _resourceDelta(before, _state),
-      events: _drainEvents(),
     );
-  }
-
-  Map<String, num> _resourceDelta(S before, S after) {
-    final resourceDelta = config.resourceDelta;
-    if (resourceDelta == null) {
-      return const <String, num>{};
-    }
-    return resourceDelta(before, after);
-  }
-
-  List<Object> _drainEvents() {
-    final bus = config.eventBus;
-    if (bus == null) {
-      return const <Object>[];
-    }
-    return bus.drain();
   }
 }
